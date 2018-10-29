@@ -30,6 +30,12 @@ void validated(int array[], int size) {
     printf("Valiedated OK\n");
 }
 
+void swap(int *a, int *b) {
+    int tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
 int main(){
     int array[NUM];
     int i;

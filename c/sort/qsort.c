@@ -1,8 +1,4 @@
-static void swap(int *a, int *b) {
-    int tmp = *a;
-    *a = *b;
-    *b = tmp;
-}
+extern void swap(int *, int *);
 
 void qsort_demo(int *array, int start, int end) {
     int i = start, j = start;
