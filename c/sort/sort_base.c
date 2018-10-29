@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define NUM 2000000
+#define NUM 2000
 #define MAX 10000
 
 extern void init_sort_func(void (**)(int *, int, int));
