@@ -1,13 +1,19 @@
 all: qsort stoogesort selectionsort
 
-qsort: sort_base.c qsort.c
-	gcc sort_base.c qsort.c -Wall -o qsort
+CC = gcc
+CFLAGS = -Wall
 
-stoogesort: sort_base.c stoogesort.c
-	gcc sort_base.c stoogesort.c -Wall -o stoogesort
+sort_base.o: sort_base.c
+	$(CC) sort_base.c $(CFLAGS) -c
 
-selectionsort: sort_base.c selectionsort.c
-	gcc sort_base.c selectionsort.c -Wall -o selectionsort
+qsort: sort_base.o qsort.c
+	$(CC) $^ $(CFLAGS) -o $@
+
+stoogesort: sort_base.o stoogesort.c
+	$(CC) $^ $(CFLAGS) -o $@
+
+selectionsort: sort_base.o selectionsort.c
+	$(CC) $^ $(CFLAGS) -o $@
 
 clean:
-	rm -rf qsort stoogesort selectionsort
+	rm -rf *.o qsort stoogesort selectionsort
