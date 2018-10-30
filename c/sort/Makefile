@@ -1,4 +1,4 @@
-all: qsort stoogesort selectionsort bubblesort
+all: qsort stoogesort selectionsort bubblesort cocktailsort
 
 CC = gcc
 CFLAGS = -Wall
@@ -18,5 +18,8 @@ selectionsort: sort_base.o selectionsort.c
 bubblesort: sort_base.o bubblesort.c
 	$(CC) $^ $(CFLAGS) -o $@
 
+cocktailsort: sort_base.o cocktailsort.c
+	$(CC) $^ $(CFLAGS) -o $@
+
 clean:
-	rm -rf *.o qsort stoogesort selectionsort
+	rm -rf *.o qsort stoogesort selectionsort bubblesort cocktailsort
