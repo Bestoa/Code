@@ -1,4 +1,4 @@
-all: qsort stoogesort selectionsort
+all: qsort stoogesort selectionsort bubblesort
 
 CC = gcc
 CFLAGS = -Wall
@@ -13,6 +13,9 @@ stoogesort: sort_base.o stoogesort.c
 	$(CC) $^ $(CFLAGS) -o $@
 
 selectionsort: sort_base.o selectionsort.c
+	$(CC) $^ $(CFLAGS) -o $@
+
+bubblesort: sort_base.o bubblesort.c
 	$(CC) $^ $(CFLAGS) -o $@
 
 clean:
