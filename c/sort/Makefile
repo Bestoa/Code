@@ -1,28 +1,20 @@
-all: qsort stoogesort selectionsort bubblesort cocktailsort insertionsort
-
-CC = gcc
-CFLAGS = -Wall
-
-sort_base.o: sort_base.c
-	$(CC) sort_base.c $(CFLAGS) -c
-
-qsort: sort_base.o qsort.c
+CC=gcc
+RM=rm
+CFLAGS=-Wall
+all: cocktailsort stoogesort bubblesort selectionsort qsort insertionsort 
+__GEN__COMMON_OBJ.o: sort_base.c 
+	$(CC) $^ $(CFLAGS) -o $@ -c
+cocktailsort: __GEN__COMMON_OBJ.o cocktailsort.c
 	$(CC) $^ $(CFLAGS) -o $@
-
-stoogesort: sort_base.o stoogesort.c
+stoogesort: __GEN__COMMON_OBJ.o stoogesort.c
 	$(CC) $^ $(CFLAGS) -o $@
-
-selectionsort: sort_base.o selectionsort.c
+bubblesort: __GEN__COMMON_OBJ.o bubblesort.c
 	$(CC) $^ $(CFLAGS) -o $@
-
-bubblesort: sort_base.o bubblesort.c
+selectionsort: __GEN__COMMON_OBJ.o selectionsort.c
 	$(CC) $^ $(CFLAGS) -o $@
-
-cocktailsort: sort_base.o cocktailsort.c
+qsort: __GEN__COMMON_OBJ.o qsort.c
 	$(CC) $^ $(CFLAGS) -o $@
-
-insertionsort: sort_base.o insertionsort.c
+insertionsort: __GEN__COMMON_OBJ.o insertionsort.c
 	$(CC) $^ $(CFLAGS) -o $@
-
 clean:
-	rm -rf *.o qsort stoogesort selectionsort bubblesort cocktailsort insertionsort
+	$(RM) -rvf *.o cocktailsort stoogesort bubblesort selectionsort qsort insertionsort 
