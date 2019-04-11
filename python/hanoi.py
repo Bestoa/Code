@@ -10,3 +10,5 @@ def hanoi(n, a, b, c):
 
 if len(sys.argv) == 2:
     hanoi(int(sys.argv[1]), 'A', 'B', 'C')
+else:
+    print('Usage: python3 hanoi.py number') 
