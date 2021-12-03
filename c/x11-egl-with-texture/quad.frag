@@ -7,5 +7,5 @@ uniform highp sampler2D tex;
 
 void main(void)
 {
-    Color = texture2D(tex, Texcoord);
+    Color = texture(tex, Texcoord);
 }

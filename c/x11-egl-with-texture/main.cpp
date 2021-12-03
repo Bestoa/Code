@@ -268,6 +268,7 @@ int main()
         eglSwapBuffers(eglDisplay, eglSurface);
     }
 
+    glDeleteTextures(1, &tex_id);
     glDeleteBuffers(1, &mVBO);
     eglMakeCurrent(eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglTerminate(eglDisplay);
