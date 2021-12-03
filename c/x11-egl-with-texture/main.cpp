@@ -14,18 +14,12 @@
 #include  <X11/Xatom.h>
 #include  <X11/Xutil.h>
 
-#include <xf86drm.h>
-#include <drm.h>
-#include <drm_fourcc.h>
-#include "buffers.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 // X11 related local variables
 static Display *x_display = NULL;
 static Atom s_wmDeleteMessage;
-
-PFNEGLCREATEIMAGEKHRPROC pfneglCreateImageKHR = NULL;
-PFNEGLDESTROYIMAGEKHRPROC pfneglDestroyImageKHR = NULL;
-PFNGLEGLIMAGETARGETTEXTURE2DOESPROC pfnglEGLImageTargetTexture2DOES = NULL;
 
 #include "shader.h"
 
@@ -138,14 +132,45 @@ GLboolean userInterrupt()
     return userinterrupt;
 }
 
-void copy_yuyv(void *vaddr, void *data, int w, int h, int pitch)
+bool loadTexture(const char *name, GLuint &tex_id)
 {
-    for (int i = 0; i < h; i++)
+    //stbi_set_flip_vertically_on_load(true);
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load(name, &width, &height, &nrChannels, 0);
+
+    if (data == nullptr)
     {
-        memcpy(vaddr, data, w*2);
-        vaddr += pitch;
-        data += w*2;
+        printf("Load texture Failed.\n");
+        return false;
     }
+
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    printf("w = %d height = %d nrChannels = %d\n", width, height, nrChannels);
+
+    if (nrChannels == 3)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+    else if (nrChannels == 4)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    else
+    {
+        printf("Only support RGB888/RGBA8888 texture.\n");
+        goto error;
+    }
+    if (glGetError() != GL_NO_ERROR)
+        goto error;
+
+    stbi_image_free(data);
+    tex_id = texture;
+
+    return true;
+error:
+    glDeleteTextures(1, &texture);
+    return false;
 }
 
 int main()
@@ -211,24 +236,6 @@ int main()
     eglMakeCurrent(eglDisplay, eglSurface, eglSurface, context);
     if (!testEGLError("eglMakeCurrent")) { return false; }
 
-    pfneglCreateImageKHR = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
-    if (pfneglCreateImageKHR == NULL) {
-        printf("Failed to get func eglCreateImageKHR\n");
-        return false;
-    }
-    pfneglDestroyImageKHR =
-        (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
-    if (pfneglDestroyImageKHR == NULL) {
-        printf( "eglGetProcAddress failed for eglDestroyImageKHR\n");
-        return false;
-    }
-    pfnglEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)
-        eglGetProcAddress("glEGLImageTargetTexture2DOES");
-    if (pfnglEGLImageTargetTexture2DOES == NULL) {
-        printf("eglGetProcAddress failed for glEGLImageTargetTexture2DOES\n");
-        return false;
-    }
-
     Shader shader("quad.vert", "quad.frag");
     shader.use();
     GLfloat triangles[] =
@@ -249,93 +256,9 @@ int main()
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 6*sizeof(GLfloat), reinterpret_cast<void *>(4*sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
 
-    int fd = open("/dev/dri/card1", O_RDWR, 0);
-    if (fd < 0) {
-        printf("Open DRM device failed\n");
-        return false;
-    }
-
-#define IMG_WIDTH (600)
-#define IMG_HEIGHT (600)
-#define DATA_LEN_YUYV (IMG_WIDTH*IMG_HEIGHT*2)
-
-    int data_len = DATA_LEN_YUYV;
-    char *texname = "grid_yuyv_600.yuv";
-    int format = DRM_FORMAT_YUYV;
-
-    void *data = malloc(data_len);
-    if (!data) {
-        printf("Malloc texture data failed\n");
-        return false;
-    }
-
-    FILE *fp = fopen(texname, "rb");
-    if (!fp) {
-        printf("Open texture file failed.\n");
-        return false;
-    }
-    int read_bytes = fread(data, 1, data_len, fp);
-    fclose(fp);
-    if (read_bytes != data_len)
-    {
-        printf("read file error.\n");
-        return false;
-    }
-
-    unsigned int handles[4] = { 0 };
-    unsigned int pitches[4] = { 0 };
-    unsigned int offsets[4] = { 0 };
-    void *vaddr;
-
-    struct bo *pbo = bo_create(fd, format, IMG_WIDTH, IMG_WIDTH, handles, pitches, offsets, &vaddr);
-    if (!pbo)
-    {
-        printf("create bo failed.\n");
-        return false;
-    }
-    for (int i = 0; i < 4; i++)
-    {
-        printf("handld pitch offset [i] = %d %d %d\n", handles[i], pitches[i], offsets[i]);
-    }
-    // For test, we need to load data.
-    copy_yuyv(vaddr, data, IMG_WIDTH, IMG_HEIGHT, pitches[0]);
-
-    struct drm_prime_handle prime;
-    memset(&prime, 0, sizeof(prime));
-    prime.handle = handles[0];
-    if (drmIoctl(fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime)) {
-        printf("Failed to export fd (err=%d)\n", errno);
-        return false;
-    }
-
-    EGLint aiImageAttribs[25] =
-    {
-        EGL_WIDTH, IMG_WIDTH,
-        EGL_HEIGHT, IMG_HEIGHT,
-        EGL_LINUX_DRM_FOURCC_EXT, format,
-        EGL_DMA_BUF_PLANE0_FD_EXT, prime.fd,
-        EGL_DMA_BUF_PLANE0_OFFSET_EXT, offsets[0],
-        EGL_DMA_BUF_PLANE0_PITCH_EXT, pitches[0],
-        EGL_NONE,
-    };
-    EGLImage eglImage = pfneglCreateImageKHR(eglDisplay, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, NULL, aiImageAttribs);
-    if (EGL_NO_IMAGE == eglImage)
-    {
-        printf( "Failed to create image\n");
-        return false;
-    }
-
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, tex);
-    glTexParameterf(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameterf(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameterf(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    pfnglEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, eglImage);
-    checkGlError("pfnglEGLImageTargetTexture2DOES");
-    shader.setInt("yuvTexSampler", 0);
+    GLuint tex_id;
+    loadTexture("tex.tga", tex_id);
+    shader.setInt("tex", 0);
 
     while(userInterrupt() == GL_FALSE)
     {
@@ -345,9 +268,6 @@ int main()
         eglSwapBuffers(eglDisplay, eglSurface);
     }
 
-    free(data);
-    bo_destroy(pbo);
-    pfneglDestroyImageKHR(eglDisplay, eglImage);
     glDeleteBuffers(1, &mVBO);
     eglMakeCurrent(eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglTerminate(eglDisplay);
