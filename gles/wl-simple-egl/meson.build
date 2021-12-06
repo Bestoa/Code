@@ -5,6 +5,6 @@ project('wayland-client-egl', 'cpp',
 dep = [ dependency('wayland-egl'), dependency('wayland-client'), dependency('egl'), dependency('glesv2') ]
 
 executable('wayland-client-egl',
-           'OpenGLESHelloAPI_LinuxWayland.cpp',
+           'wl-egl.cpp',
            dependencies : dep,
            install : true)
