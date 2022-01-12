@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <cstring>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <GLES3/gl32.h>
 #include <GLES2/gl2ext.h>
@@ -13,6 +14,16 @@
 #include  <X11/Xlib.h>
 #include  <X11/Xatom.h>
 #include  <X11/Xutil.h>
+
+#define USE_GBM_TEX 1
+
+#if USE_GBM_TEX
+#include <gbm.h>
+#include <xf86drm.h>
+#include <drm_fourcc.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#endif
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -132,6 +143,7 @@ GLboolean userInterrupt()
     return userinterrupt;
 }
 
+#if !USE_GBM_TEX
 bool loadTexture(const char *name, GLuint &tex_id)
 {
     //stbi_set_flip_vertically_on_load(true);
@@ -172,6 +184,12 @@ error:
     glDeleteTextures(1, &texture);
     return false;
 }
+#endif
+
+#if USE_GBM_TEX
+constexpr int GBM_BUFFER_W = 500;
+constexpr int GBM_BUFFER_H = 500;
+#endif
 
 int main()
 {
@@ -253,8 +271,59 @@ int main()
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 6*sizeof(GLfloat), reinterpret_cast<void *>(4*sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
 
+#if !USE_GBM_TEX
     GLuint tex_id;
     loadTexture("tex.tga", tex_id);
+#else
+    int drm_fd = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
+    assert(drm_fd >= 0);
+    struct gbm_device* gbm = gbm_create_device(drm_fd);
+    assert(gbm != nullptr);
+    struct gbm_bo *gbo = gbm_bo_create(gbm, GBM_BUFFER_W, GBM_BUFFER_H, GBM_FORMAT_XBGR8888, GBM_BO_USE_LINEAR);
+    assert(gbo != nullptr);
+    int gbm_dmabuf_fd = gbm_bo_get_fd(gbo);
+    assert(gbm_dmabuf_fd >= 0);
+    int gbo_pitch = gbm_bo_get_stride(gbo);
+    printf("gbo pitch = %d\n", gbo_pitch);
+    void *vaddr;
+    vaddr = mmap(nullptr, gbo_pitch * GBM_BUFFER_W, (PROT_READ | PROT_WRITE), MAP_SHARED, gbm_dmabuf_fd, 0);
+    printf("gbo vaddr = %p\n", vaddr);
+    for (int i = 0; i < gbo_pitch * GBM_BUFFER_H; i ++)
+    {
+        if (i % 4 == 0)
+            *reinterpret_cast<uint8_t *>(vaddr + i) = 255;
+        else
+            *reinterpret_cast<uint8_t *>(vaddr + i) = 0;
+    }
+    munmap(vaddr, gbo_pitch * GBM_BUFFER_H);
+
+    PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
+    assert(eglCreateImageKHR != nullptr);
+    PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+    assert(glEGLImageTargetTexture2DOES != nullptr);
+    PFNEGLDESTROYIMAGEKHRPROC eglDestroyImageKHR = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
+    assert(eglDestroyImageKHR != nullptr);
+
+    const EGLint khr_image_attrs[] = {
+        EGL_DMA_BUF_PLANE0_FD_EXT, gbm_dmabuf_fd,
+        EGL_WIDTH, GBM_BUFFER_W,
+        EGL_HEIGHT, GBM_BUFFER_H,
+        EGL_LINUX_DRM_FOURCC_EXT, GBM_FORMAT_XBGR8888,
+        EGL_DMA_BUF_PLANE0_PITCH_EXT, gbo_pitch,
+        EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
+        EGL_NONE, EGL_NONE
+    };
+
+    EGLImage eglImage = eglCreateImageKHR(eglDisplay, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr /* no client buffer */, khr_image_attrs);
+
+    GLuint dma_tex_id;
+    glGenTextures(1, &dma_tex_id);
+    glBindTexture(GL_TEXTURE_2D, dma_tex_id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, eglImage);
+    checkGlError("glEGLImageTargetTexture2DOES");
+#endif
     shader.setInt("tex", 0);
 
     while(userInterrupt() == GL_FALSE)
@@ -265,7 +334,15 @@ int main()
         eglSwapBuffers(eglDisplay, eglSurface);
     }
 
+#if USE_GBM_TEX
+    eglDestroyImageKHR(eglDisplay, eglImage);
+    glDeleteTextures(1, &dma_tex_id);
+    gbm_bo_destroy(gbo);
+    gbm_device_destroy(gbm);
+    close(drm_fd);
+#else
     glDeleteTextures(1, &tex_id);
+#endif
     glDeleteBuffers(1, &mVBO);
     eglMakeCurrent(eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglTerminate(eglDisplay);
