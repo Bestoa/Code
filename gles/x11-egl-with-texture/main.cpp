@@ -220,9 +220,6 @@ int main()
     eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, (EGLNativeWindowType)eglNativeWindow, NULL);
     if (!testEGLError("eglCreateWindowSurface")) { return false; }
 
-    eglBindAPI(EGL_OPENGL_ES_API);
-    if (!testEGLError("eglBindAPI")) { return false; }
-
     EGLint contextAttributes[] = {
         EGL_CONTEXT_MAJOR_VERSION, 3,
         EGL_CONTEXT_MINOR_VERSION, 2,
