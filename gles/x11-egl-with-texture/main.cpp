@@ -15,9 +15,9 @@
 #include  <X11/Xatom.h>
 #include  <X11/Xutil.h>
 
-#define USE_GBM_TEX 1
+#define USE_DMABUF 1
 
-#if USE_GBM_TEX
+#if USE_DMABUF
 #include <gbm.h>
 #include <xf86drm.h>
 #include <drm_fourcc.h>
@@ -143,52 +143,49 @@ GLboolean userInterrupt()
     return userinterrupt;
 }
 
-#if !USE_GBM_TEX
-bool loadTexture(const char *name, GLuint &tex_id)
+bool loadImageData(const char *name, unsigned char **addr, int *width, int *height)
 {
     //stbi_set_flip_vertically_on_load(true);
-    int width, height, nrChannels;
-    unsigned char *data = stbi_load(name, &width, &height, &nrChannels, 0);
+    int nrChannels;
+    // Force stbi return 4 channels.
+    *addr = stbi_load(name, width, height, &nrChannels, 4);
 
-    if (data == nullptr)
+    if (*addr == nullptr)
     {
         printf("Load texture Failed.\n");
         return false;
     }
-
-    GLuint texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    printf("w = %d height = %d nrChannels = %d\n", width, height, nrChannels);
-
-    if (nrChannels == 3)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-    else if (nrChannels == 4)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    else
-    {
-        printf("Only support RGB888/RGBA8888 texture.\n");
-        goto error;
-    }
-    if (glGetError() != GL_NO_ERROR)
-        goto error;
-
-    stbi_image_free(data);
-    tex_id = texture;
-
     return true;
-error:
-    glDeleteTextures(1, &texture);
-    return false;
 }
-#endif
 
-#if USE_GBM_TEX
-constexpr int GBM_BUFFER_W = 500;
-constexpr int GBM_BUFFER_H = 500;
+void freeImageData(unsigned char *addr)
+{
+    stbi_image_free(addr);
+}
+
+#if USE_DMABUF
+void loadImageToGBMBUF(struct gbm_bo *gbo, uint8_t *data, int w, int h)
+{
+    int fd = gbm_bo_get_fd(gbo);
+    assert(fd >= 0);
+    int pitch = gbm_bo_get_stride(gbo);
+    void *vaddr = mmap(nullptr, pitch * h, (PROT_READ | PROT_WRITE), MAP_SHARED, fd, 0);
+    uint8_t *dst, *src;
+    for (int i = 0; i < h; i++)
+    {
+        src = data + i * w * 4;
+        dst = (uint8_t *)(vaddr + i * pitch);
+        for(int j = 0; j < pitch; j += 4)
+        {
+            dst[j + 0] = src[j + 0];
+            dst[j + 1] = src[j + 1];
+            dst[j + 2] = src[j + 2];
+            dst[j + 3] = src[j + 3];
+        }
+    }
+    munmap(vaddr, pitch * h);
+}
+
 #endif
 
 int main()
@@ -271,31 +268,22 @@ int main()
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 6*sizeof(GLfloat), reinterpret_cast<void *>(4*sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
 
-#if !USE_GBM_TEX
-    GLuint tex_id;
-    loadTexture("tex.tga", tex_id);
-#else
+    int width, height;
+    uint8_t *data;
+    assert(loadImageData("tex.tga", &data, &width, &height) == true);
+    printf("Use GBM_TEX tex = %d\n", USE_DMABUF);
+#if USE_DMABUF
     int drm_fd = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
     assert(drm_fd >= 0);
     struct gbm_device* gbm = gbm_create_device(drm_fd);
     assert(gbm != nullptr);
-    struct gbm_bo *gbo = gbm_bo_create(gbm, GBM_BUFFER_W, GBM_BUFFER_H, GBM_FORMAT_XBGR8888, GBM_BO_USE_LINEAR);
+    struct gbm_bo *gbo = gbm_bo_create(gbm, width, height, GBM_FORMAT_ABGR8888, GBM_BO_USE_LINEAR);
     assert(gbo != nullptr);
-    int gbm_dmabuf_fd = gbm_bo_get_fd(gbo);
-    assert(gbm_dmabuf_fd >= 0);
-    int gbo_pitch = gbm_bo_get_stride(gbo);
-    printf("gbo pitch = %d\n", gbo_pitch);
-    void *vaddr;
-    vaddr = mmap(nullptr, gbo_pitch * GBM_BUFFER_W, (PROT_READ | PROT_WRITE), MAP_SHARED, gbm_dmabuf_fd, 0);
-    printf("gbo vaddr = %p\n", vaddr);
-    for (int i = 0; i < gbo_pitch * GBM_BUFFER_H; i ++)
-    {
-        if (i % 4 == 0)
-            *reinterpret_cast<uint8_t *>(vaddr + i) = 255;
-        else
-            *reinterpret_cast<uint8_t *>(vaddr + i) = 0;
-    }
-    munmap(vaddr, gbo_pitch * GBM_BUFFER_H);
+    int dmabuf_fd = gbm_bo_get_fd(gbo);
+    assert(dmabuf_fd >= 0);
+    int pitch = gbm_bo_get_stride(gbo);
+    loadImageToGBMBUF(gbo, data, width, height);
+    int format = GBM_FORMAT_XBGR8888;
 
     PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
     assert(eglCreateImageKHR != nullptr);
@@ -305,25 +293,33 @@ int main()
     assert(eglDestroyImageKHR != nullptr);
 
     const EGLint khr_image_attrs[] = {
-        EGL_DMA_BUF_PLANE0_FD_EXT, gbm_dmabuf_fd,
-        EGL_WIDTH, GBM_BUFFER_W,
-        EGL_HEIGHT, GBM_BUFFER_H,
-        EGL_LINUX_DRM_FOURCC_EXT, GBM_FORMAT_XBGR8888,
-        EGL_DMA_BUF_PLANE0_PITCH_EXT, gbo_pitch,
+        EGL_DMA_BUF_PLANE0_FD_EXT, dmabuf_fd,
+        EGL_WIDTH, width,
+        EGL_HEIGHT, height,
+        EGL_LINUX_DRM_FOURCC_EXT, format,
+        EGL_DMA_BUF_PLANE0_PITCH_EXT, pitch,
         EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
         EGL_NONE, EGL_NONE
     };
 
     EGLImage eglImage = eglCreateImageKHR(eglDisplay, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr /* no client buffer */, khr_image_attrs);
+    assert(eglImage != EGL_NO_IMAGE);
+#endif
 
-    GLuint dma_tex_id;
-    glGenTextures(1, &dma_tex_id);
-    glBindTexture(GL_TEXTURE_2D, dma_tex_id);
+    GLuint tex_id;
+    glGenTextures(1, &tex_id);
+    glBindTexture(GL_TEXTURE_2D, tex_id);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+#if USE_DMABUF
     glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, eglImage);
     checkGlError("glEGLImageTargetTexture2DOES");
+#else
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    checkGlError("glTexImage2D");
 #endif
+    freeImageData(data);
     shader.setInt("tex", 0);
 
     while(userInterrupt() == GL_FALSE)
@@ -334,14 +330,12 @@ int main()
         eglSwapBuffers(eglDisplay, eglSurface);
     }
 
-#if USE_GBM_TEX
+    glDeleteTextures(1, &tex_id);
+#if USE_DMABUF
     eglDestroyImageKHR(eglDisplay, eglImage);
-    glDeleteTextures(1, &dma_tex_id);
     gbm_bo_destroy(gbo);
     gbm_device_destroy(gbm);
     close(drm_fd);
-#else
-    glDeleteTextures(1, &tex_id);
 #endif
     glDeleteBuffers(1, &mVBO);
     eglMakeCurrent(eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
