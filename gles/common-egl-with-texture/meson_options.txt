@@ -1,0 +1,1 @@
+option('platform', type : 'combo', choices : ['x11', 'wayland'], value : 'x11')
