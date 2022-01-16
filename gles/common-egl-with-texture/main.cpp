@@ -220,11 +220,14 @@ int main()
     freeImageData(data);
     shader.setInt("tex", 0);
 
+    glm::mat4 mat(1.0f);
     while(!shouldStop())
     {
         pollEvent();
         glClearColor(0.00f, 0.70f, 0.67f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+        mat = glm::rotate(mat, glm::radians(10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        shader.setMat4("modelMat", &mat[0][0]);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         eglSwapBuffers(eglDisplay, eglSurface);
     }
