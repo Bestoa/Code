@@ -81,7 +81,7 @@ void loadImageToGBMBUF(struct gbm_bo *gbo, uint8_t *data, int w, int h)
     for (int i = 0; i < h; i++)
     {
         src = data + i * w * 4;
-        dst = (uint8_t *)(vaddr + i * pitch);
+        dst = (uint8_t *)(vaddr) + i * pitch;
         for(int j = 0; j < pitch; j += 4)
         {
             dst[j + 0] = src[j + 0];
@@ -95,7 +95,7 @@ void loadImageToGBMBUF(struct gbm_bo *gbo, uint8_t *data, int w, int h)
 
 #endif
 
-extern bool nativeInit(int w, int h, EGLNativeDisplayType *eglNativeDisplay, EGLNativeWindowType *eglNativeWindow);
+extern bool nativeInit(int w, int h, EGLNativeDisplayType *eglNativeDisplay, EGLNativeWindowType *eglNativeWindow, bool fullscreen);
 extern void nativeDestroy();
 extern void pollEvent();
 extern bool shouldStop();
@@ -107,8 +107,7 @@ int main()
     assert(loadImageData("tex.tga", &data, &tex_w, &tex_h) == true);
     printf("Use GBM_TEX tex = %d\n", USE_DMABUF);
 #if USE_DMABUF
-    // hard code card1 here for my amd card
-    int drm_fd = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
+    int drm_fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
     assert(drm_fd >= 0);
     struct gbm_device* gbm = gbm_create_device(drm_fd);
     assert(gbm != nullptr);
@@ -131,7 +130,7 @@ int main()
     // EGL start
     EGLNativeDisplayType eglNativeDisplay;
     EGLNativeWindowType eglNativeWindow;
-    assert(nativeInit(WIDTH, HEIGHT, &eglNativeDisplay, &eglNativeWindow) == EGL_TRUE);
+    assert(nativeInit(WIDTH, HEIGHT, &eglNativeDisplay, &eglNativeWindow, false) == EGL_TRUE);
 
     EGLDisplay eglDisplay = eglGetDisplay(eglNativeDisplay);
     assert(eglDisplay != EGL_NO_DISPLAY);

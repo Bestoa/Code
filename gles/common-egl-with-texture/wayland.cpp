@@ -79,7 +79,7 @@ bool initWaylandConnection()
 }
 
 
-bool nativeInit(int w, int h, EGLNativeDisplayType *eglNativeDisplay, EGLNativeWindowType *eglNativeWindow)
+bool nativeInit(int w, int h, EGLNativeDisplayType *eglNativeDisplay, EGLNativeWindowType *eglNativeWindow, bool fullscreen)
 {
     if (!initWaylandConnection())
         return false;
@@ -100,7 +100,10 @@ bool nativeInit(int w, int h, EGLNativeDisplayType *eglNativeDisplay, EGLNativeW
     }
 
     wl_shell_surface_add_listener(wlShellSurface, &shellSurfaceListeners, NULL);
-    wl_shell_surface_set_toplevel(wlShellSurface);
+    if (fullscreen)
+        wl_shell_surface_set_fullscreen(wlShellSurface, WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT, 0, nullptr);
+    else
+        wl_shell_surface_set_toplevel(wlShellSurface);
 
     *eglNativeWindow = (EGLNativeWindowType)wl_egl_window_create(wlSurface, w, h);
     if (*eglNativeWindow == (EGLNativeWindowType)EGL_NO_SURFACE) {
@@ -123,7 +126,8 @@ void nativeDestroy()
 
 void pollEvent()
 {
-    wl_display_dispatch_pending(wlDisplay);
+    if (wl_display_dispatch_pending(wlDisplay) == -1)
+        gShouldStop = true;
 }
 
 bool shouldStop()

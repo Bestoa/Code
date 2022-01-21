@@ -12,12 +12,13 @@ static Display *x_display = NULL;
 static Atom s_wmDeleteMessage;
 static bool gShouldStop = false;
 
-bool nativeInit(int w, int h, EGLNativeDisplayType *eglNativeDisplay, EGLNativeWindowType *eglNativeWindow)
+bool nativeInit(int w, int h, EGLNativeDisplayType *eglNativeDisplay, EGLNativeWindowType *eglNativeWindow, bool fullscreen)
 {
     Window root;
     XSetWindowAttributes swa;
     XSetWindowAttributes  xattr;
     Atom wm_state;
+    Atom fs_wm_state;
     XWMHints hints;
     XEvent xev;
     Window win;
@@ -58,6 +59,7 @@ bool nativeInit(int w, int h, EGLNativeDisplayType *eglNativeDisplay, EGLNativeW
 
     // get identifiers for the provided atom name strings
     wm_state = XInternAtom (x_display, "_NET_WM_STATE", false);
+    fs_wm_state = XInternAtom(x_display, "_NET_WM_STATE_FULLSCREEN", false);
 
     memset ( &xev, 0, sizeof(xev) );
     xev.type                 = ClientMessage;
@@ -66,6 +68,8 @@ bool nativeInit(int w, int h, EGLNativeDisplayType *eglNativeDisplay, EGLNativeW
     xev.xclient.format       = 32;
     xev.xclient.data.l[0]    = 1;
     xev.xclient.data.l[1]    = false;
+    if (fullscreen)
+        xev.xclient.data.l[1] = fs_wm_state;
     XSendEvent (
             x_display,
             DefaultRootWindow ( x_display ),
