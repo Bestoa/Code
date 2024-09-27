@@ -1,6 +1,11 @@
+`define UART_1
+
 module uart_test (
     input clk,
     input rst_n,
+`ifdef UART_1
+    output ser_tx1,
+`endif
     input ser_rx,
     output ser_tx
 );
@@ -8,6 +13,10 @@ module uart_test (
     reg [7:0] uart_tx_data;
     reg [31:0] counter;
     reg uart_tx_start;
+
+`ifdef UART_1
+    assign ser_tx1 = ser_tx;
+`endif
 
     wire tx_busy;
 
