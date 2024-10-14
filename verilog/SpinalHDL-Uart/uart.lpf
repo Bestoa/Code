@@ -1,0 +1,6 @@
+BLOCK RESETPATHS ;
+BLOCK ASYNCPATHS ;
+LOCATE COMP "clk" SITE "K16" ;// on-board oscillator
+LOCATE COMP "resetn" SITE "C4" ;
+LOCATE COMP "io_uart_txd" SITE "A8" ;
+LOCATE COMP "io_uart_rxd" SITE "A7" ;
