@@ -3,9 +3,9 @@ module uart_rx (
     input uart_rst_n,
     input [15:0] uart_divider,
     input uart_ser_rx,
-    input uart_rx_ready_rst,
+    input uart_rx_ready,
     output reg [7:0] uart_rx_data,
-    output reg uart_rx_ready
+    output reg uart_rx_valid
 );
 
     reg r0, r1;
@@ -37,19 +37,19 @@ module uart_rx (
         if (~uart_rst_n) begin
             receive_state <= IDLE;
             rx_data <= 0;
-            uart_rx_ready <= 0;
+            uart_rx_valid <= 0;
             receive_divider <= 0;
             receive_bitcnt <= 0;
         end else begin
-            if (uart_rx_ready_rst && uart_rx_ready)
-                uart_rx_ready <= 0;
+            if (uart_rx_ready && uart_rx_valid)
+                uart_rx_valid <= 0;
             case (receive_state)
                 IDLE: begin
                     if (flip) begin
                         receive_state <= START;
                         rx_data <= 0;
                         receive_divider <= 0;
-                        uart_rx_ready <= 0;
+                        uart_rx_valid <= 0;
                     end
                 end
                 START: begin
@@ -79,7 +79,7 @@ module uart_rx (
                         receive_divider <= 0;
                         receive_state <= IDLE;
                         // rx_data is ready
-                        uart_rx_ready <= 1;
+                        uart_rx_valid <= 1;
                         uart_rx_data <= rx_data;
                     end else begin
                         receive_divider <= receive_divider + 1;
