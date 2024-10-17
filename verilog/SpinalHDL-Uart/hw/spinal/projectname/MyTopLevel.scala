@@ -22,7 +22,7 @@ case class UartCtrlUsageExample() extends Component {
   uartCtrl.io.read.ready := True
 
   val writeValid = Reg(Bool()) init True
-  val cnt = Reg(UInt(32 bits)) init 0
+  val cnt = Counter(24_000_000)
   val enableEcho = Reg(Bool()) init False
   val index = Reg(UInt(32 bits)) init 0
   val hello_str = "Welcome to SpinalHDL's world-1!\n\r"
@@ -32,11 +32,10 @@ case class UartCtrlUsageExample() extends Component {
     hello((i+1)*8-1 downto i*8) := hello_str(i)
   }
 
-
-  cnt := cnt + 1
-  when (cnt === 24_000_000) {
+  cnt.increment();
+  when (cnt.willOverflow) {
+    cnt.clear()
     writeValid := True
-    cnt := 0
     index := 0
     enableEcho := False
   }

@@ -1,4 +1,4 @@
-all: sbt yosys nextpnr ecppack
+all: sbt yosys nextpnr pack
 
 sbt:
 	sbt run
