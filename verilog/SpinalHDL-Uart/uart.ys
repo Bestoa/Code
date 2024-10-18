@@ -1,0 +1,3 @@
+read_verilog hw/gen/UartCtrlUsageExample.v
+synth_ecp5
+write_json uart.json

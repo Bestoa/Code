@@ -1,22 +1,22 @@
-all: sbt yosys nextpnr pack
+PROJECT=uart
 
-target=uart
+all: sbt yosys nextpnr pack
 
 sbt:
 	sbt run
 
 yosys:
-	yosys -p "read_verilog hw/gen/UartCtrlUsageExample.v; synth_ecp5; write_json uart.json"
+	yosys ${PROJECT}.ys
 
 nextpnr:
-	nextpnr-ecp5 --textcfg $(target).config --25k --package CABGA256 --speed 6 --json $(target).json --lpf $(target).lpf --freq 24
+	nextpnr-ecp5 --textcfg ${PROJECT}.config --25k --package CABGA256 --speed 6 --json ${PROJECT}.json --lpf ${PROJECT}.lpf --freq 24
 
 pack:
-	ecppack $(target).config $(target).bit
+	ecppack ${PROJECT}.config ${PROJECT}.bit
 
 burn:
-	openFPGALoader $(target).bit
+	openFPGALoader ${PROJECT}.bit
 
 clean:
-	rm -rf hw/gen/* $(target).json $(target).config $(target).bit
+	rm -rf hw/gen/* *.json *.config *.bit
 

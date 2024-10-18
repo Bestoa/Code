@@ -25,7 +25,7 @@ case class UartCtrlUsageExample() extends Component {
   val cnt = Counter(24_000_000)
   val enableEcho = Reg(Bool()) init False
   val index = Reg(UInt(32 bits)) init 0
-  val hello_str = "Welcome to SpinalHDL's world-1!\n\r"
+  val hello_str = "Welcome to SpinalHDL's world!\n\r"
   
   val hello = Bits(hello_str.length*8 bits)
   for (i <- 0 until hello_str.length) {

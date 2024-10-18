@@ -1,20 +1,22 @@
+PROJECT=led
+
 all: sbt yosys nextpnr pack
 
 sbt:
 	sbt run
 
 yosys:
-	yosys -p "read_verilog hw/gen/Led.v hw/verilog/pll.v; synth_ecp5; write_json led.json"
+	yosys ${PROJECT}.ys
 
 nextpnr:
-	nextpnr-ecp5 --textcfg led.config --25k --package CABGA256 --speed 6 --json led.json --lpf led.lpf --freq 24
+	nextpnr-ecp5 --textcfg ${PROJECT}.config --25k --package CABGA256 --speed 6 --json ${PROJECT}.json --lpf ${PROJECT}.lpf --freq 24
 
 pack:
-	ecppack led.config led.bit
+	ecppack ${PROJECT}.config ${PROJECT}.bit
 
 burn:
-	openFPGALoader led.bit
+	openFPGALoader ${PROJECT}.bit
 
 clean:
-	rm -rf hw/gen/* led.json led.config led.bit
+	rm -rf hw/gen/* *.json *.config *.bit
 

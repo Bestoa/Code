@@ -1,0 +1,4 @@
+read_verilog hw/gen/Led.v
+read_verilog hw/verilog/pll.v
+synth_ecp5
+write_json led.json
